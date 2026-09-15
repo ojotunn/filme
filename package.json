@@ -8,8 +8,13 @@
     "start": "node src/server.js",
     "prova": "node prova/prova_navegador.js"
   },
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "puppeteer-core": "^25.10.0"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
   }
 }

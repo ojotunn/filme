@@ -3,403 +3,77 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FILME — prototype</title>
+<title>FILME</title>
 <link rel="icon" href="data:,">
 <style>
   :root { color-scheme: dark; }
   body { margin: 0; background: #0b0b0e; color: #e8e6e1; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 16px; }
   h1 { font-size: 16px; font-weight: 600; margin: 0 0 4px; letter-spacing: .04em; }
   .sub { color: #8a877f; margin: 0 0 14px; }
-  .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; max-width: 1400px; }
+  .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; max-width: 1400px; }
   @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
-  .frame { position: relative; background: #000; border: 1px solid #23232a; aspect-ratio: 16 / 9; max-width: 100%; }
-  canvas { width: 100%; height: 100%; display: block; image-rendering: auto; }
+  .frame { position: relative; background: #000; border: 1px solid #23232a; aspect-ratio: 16 / 9; max-width: 100%; overflow: hidden; }
+  .frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .bar { height: 6px; background: #1b1b21; margin: 10px 0 4px; }
+  .bar i { display: block; height: 100%; width: 0; background: #e8e6e1; transition: width .5s; }
+  .scrub { display: flex; gap: 10px; align-items: center; margin: 8px 0 14px; color: #8a877f; }
+  .scrub input { flex: 1; min-width: 0; }
+  .scrub button { width: auto; margin: 0; padding: 4px 10px; font-size: 12px; }
   .panel { border: 1px solid #23232a; padding: 14px; background: #101014; }
   .row { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid #1b1b21; }
   .row span:first-child { color: #8a877f; }
   .row b { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; word-break: break-word; }
+  h2 { font-size: 12px; font-weight: 600; color: #8a877f; letter-spacing: .08em; text-transform: uppercase; margin: 16px 0 4px; }
   button { margin-top: 12px; width: 100%; padding: 12px; font: inherit; font-weight: 600; background: #e8e6e1; color: #0b0b0e; border: 0; cursor: pointer; }
   button[disabled] { background: #2a2a31; color: #6d6a63; cursor: default; }
   .note { color: #8a877f; font-size: 12px; margin-top: 10px; }
   #err { display: none; margin-top: 12px; padding: 10px; background: #3a1010; color: #ffb4b4; white-space: pre-wrap; font: 12px/1.4 ui-monospace, Consolas, monospace; }
   #err.on { display: block; }
-  .tiles { position: absolute; inset: 0; pointer-events: none; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  td { padding: 4px 0; border-bottom: 1px solid #1b1b21; vertical-align: top; }
+  td:nth-child(2) { color: #8a877f; } td:nth-child(3), td:nth-child(4) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mine { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  .mine canvas { width: 64px; height: 64px; image-rendering: pixelated; border: 1px solid #23232a; }
+  .mine span { color: #8a877f; font-size: 12px; }
 </style>
 </head>
 <body>
-<h1>FILME · renderer prototype</h1>
-<p class="sub">Phase 2: measures how many light samples per second your GPU produces. Nothing runs until you press the button.</p>
+<h1>FILME</h1>
+<p class="sub">A short film computed by the people watching it. Press the button and your GPU renders tiles of the current frame. Nothing runs until you do.</p>
 
 <div class="wrap">
-  <div class="frame">
-    <canvas id="cv" width="1024" height="576"></canvas>
-    <canvas id="tiles" class="tiles" width="1024" height="576"></canvas>
+  <div>
+    <div class="frame">
+      <canvas id="cv" width="1024" height="576"></canvas>
+      <canvas id="tiles" width="1024" height="576"></canvas>
+    </div>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="row"><span>Film progress</span><b id="pct">0%</b></div>
+    <div class="scrub"><span>Frame</span><input id="scrub" type="range" min="0" max="0" value="0"><b id="scrubLabel">live</b><button id="live">live</button></div>
+    <div class="row"><span>Machines computing right now</span><b id="machines">—</b></div>
+    <div class="row"><span>Frames finished</span><b id="framesDone">—</b></div>
+    <div class="row"><span>Frame being computed</span><b id="frameNow">—</b></div>
+    <div class="row"><span>Light samples so far</span><b id="total">—</b></div>
+    <div class="row"><span>Verification</span><b id="verify">—</b></div>
+    <h2>Top machines</h2>
+    <table><tbody id="top"></tbody></table>
   </div>
   <div class="panel">
-    <div class="row"><span>GPU</span><b id="gpu">—</b></div>
-    <div class="row"><span>Frame</span><b id="res">1024 × 576 · 64 px tiles</b></div>
+    <div class="row"><span>Your GPU</span><b id="gpu">—</b></div>
     <div class="row"><span>Status</span><b id="st">idle</b></div>
     <div class="row"><span>Samples / s</span><b id="rate">—</b></div>
     <div class="row"><span>Tiles / s</span><b id="trate">—</b></div>
-    <div class="row"><span>Samples per pixel</span><b id="spp">0</b></div>
+    <div class="row"><span>Tiles you computed</span><b id="spp">0</b></div>
     <div class="row"><span>Elapsed</span><b id="el">0 s</b></div>
     <div class="row"><span>Whole film, this machine alone</span><b id="film">—</b></div>
     <div class="row"><span>Whole film, 100 machines like this</span><b id="film100">—</b></div>
+    <div class="mine"><canvas id="mine" width="64" height="64"></canvas><span id="mineLabel">your last tile</span></div>
     <button id="go">Start computing</button>
-    <div class="note" id="note">Uses your GPU through WebGPU while this tab is open. Press again to stop. The film is 1,440 frames × 1024 × 576 × 1,024 samples.</div>
+    <div class="note" id="note">Uses your GPU through WebGPU while this tab is open. Press again to stop. Every tile you send is checked against another machine's.</div>
     <div id="err"></div>
   </div>
 </div>
 
-<script>
-// Protótipo da fase 2 (ver SPEC.md): path tracer em WGSL rodando na placa do visitante.
-// A cena é de teste (esferas + chão). O que importa aqui é o número: amostras por segundo.
-// Todo erro aparece NA TELA (caixa #err) — regra do projeto.
-
-const $ = id => document.getElementById(id);
-const errBox = $('err');
-function showErr(msg) { errBox.textContent += (errBox.textContent ? '\n' : '') + msg; errBox.classList.add('on'); }
-window.addEventListener('error', e => showErr('JS error: ' + (e.message || e)));
-window.addEventListener('unhandledrejection', e => showErr('Promise error: ' + (e.reason && e.reason.message || e.reason)));
-
-const W = 1024, H = 576, TILE = 64;
-const TX = W / TILE, TY = H / TILE, NT = TX * TY;
-const SPP_PER_DISPATCH = 4;            // passadas por ladrilho por despacho
-const FILM_SAMPLES = 1440 * 1024 * 576 * 1024; // amostras do filme inteiro (SPEC)
-const SLOT = 256;                       // alinhamento do uniform com offset dinâmico
-
-// Estado público para a prova headless ler (window.__filme)
-const state = { supported: false, gpu: null, running: false, samples: 0, tiles: 0, rate: 0, tileRate: 0,
-  elapsed: 0, spp: 0, reported: false, error: null, batch: 8 };
-window.__filme = state;
-
-const SHADER = /* wgsl */`
-struct Params {
-  size: vec4u,   // largura, altura, x do ladrilho, y do ladrilho (px)
-  tile: vec4u,   // largura do ladrilho, altura, passadas, semente
-  round: vec4u,  // índice da rodada, 0, 0, 0
-  camPos: vec4f,
-  camFwd: vec4f,
-  camRight: vec4f,
-  camUp: vec4f,
-  lens: vec4f,   // tan(fov/2) em x, em y, 0, 0
-};
-struct Sphere { pr: vec4f, alb: vec4f, ext: vec4f };  // pr = centro.xyz, raio; alb = cor.rgb, material; ext = emissão, rugosidade, ior, 0
-
-@group(0) @binding(0) var<uniform> P: Params;
-@group(0) @binding(1) var<storage, read_write> accum: array<vec4f>;
-@group(0) @binding(2) var<storage, read> spheres: array<Sphere>;
-
-fn pcg(state: ptr<function, u32>) -> u32 {
-  let old = *state;
-  *state = old * 747796405u + 2891336453u;
-  let word = ((old >> ((old >> 28u) + 4u)) ^ old) * 277803737u;
-  return (word >> 22u) ^ word;
-}
-fn rnd(state: ptr<function, u32>) -> f32 { return f32(pcg(state)) / 4294967296.0; }
-fn hashu(x0: u32) -> u32 {
-  var h = x0;
-  h ^= h >> 16u; h *= 0x7feb352du; h ^= h >> 15u; h *= 0x846ca68bu; h ^= h >> 16u;
-  return h;
-}
-fn onb(n: vec3f) -> mat3x3f {
-  let a = select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 1.0, 0.0), abs(n.x) > 0.9);
-  let t = normalize(cross(a, n));
-  let b = cross(n, t);
-  return mat3x3f(t, b, n);
-}
-fn cosineHemi(n: vec3f, rng: ptr<function, u32>) -> vec3f {
-  let r1 = rnd(rng); let r2 = rnd(rng);
-  let phi = 6.2831853 * r1; let r = sqrt(r2);
-  let v = vec3f(r * cos(phi), r * sin(phi), sqrt(max(0.0, 1.0 - r2)));
-  return normalize(onb(n) * v);
-}
-fn randSphere(rng: ptr<function, u32>) -> vec3f {
-  let z = rnd(rng) * 2.0 - 1.0; let a = rnd(rng) * 6.2831853; let r = sqrt(max(0.0, 1.0 - z * z));
-  return vec3f(r * cos(a), r * sin(a), z);
-}
-fn sky(d: vec3f) -> vec3f {
-  let t = clamp(d.y * 0.5 + 0.5, 0.0, 1.0);
-  return mix(vec3f(0.55, 0.62, 0.75), vec3f(0.05, 0.08, 0.20), t) * 0.35;
-}
-fn hitSphere(ro: vec3f, rd: vec3f, s: Sphere) -> f32 {
-  let oc = ro - s.pr.xyz;
-  let b = dot(oc, rd);
-  let c = dot(oc, oc) - s.pr.w * s.pr.w;
-  let disc = b * b - c;
-  if (disc < 0.0) { return -1.0; }
-  let sq = sqrt(disc);
-  let t0 = -b - sq;
-  if (t0 > 1e-3) { return t0; }
-  let t1 = -b + sq;
-  if (t1 > 1e-3) { return t1; }
-  return -1.0;
-}
-
-fn trace(px: u32, py: u32, rng: ptr<function, u32>) -> vec3f {
-  let jx = f32(px) + rnd(rng); let jy = f32(py) + rnd(rng);
-  let u = (jx / f32(P.size.x)) * 2.0 - 1.0;
-  let v = 1.0 - (jy / f32(P.size.y)) * 2.0;
-  var ro = P.camPos.xyz;
-  var rd = normalize(P.camFwd.xyz + u * P.lens.x * P.camRight.xyz + v * P.lens.y * P.camUp.xyz);
-  var col = vec3f(0.0);
-  var thr = vec3f(1.0);
-  let n = arrayLength(&spheres);
-  for (var b = 0u; b < 8u; b++) {
-    var t = 1e30; var id = -1;
-    if (rd.y < 0.0) { let tg = -ro.y / rd.y; if (tg > 1e-3 && tg < t) { t = tg; id = -2; } }
-    for (var i = 0u; i < n; i++) {
-      let ts = hitSphere(ro, rd, spheres[i]);
-      if (ts > 0.0 && ts < t) { t = ts; id = i32(i); }
-    }
-    if (id == -1) { col += thr * sky(rd); break; }
-    let p = ro + rd * t;
-    var nrm = vec3f(0.0, 1.0, 0.0);
-    var alb = vec3f(0.0);
-    var mat = 0; var rough = 0.0; var ior = 1.5; var emis = 0.0;
-    if (id == -2) {
-      let cx = i32(floor(p.x * 0.5)); let cz = i32(floor(p.z * 0.5));
-      alb = select(vec3f(0.22), vec3f(0.72), ((cx + cz) & 1) == 0);
-    } else {
-      let s = spheres[id];
-      nrm = normalize(p - s.pr.xyz);
-      alb = s.alb.xyz; mat = i32(s.alb.w); emis = s.ext.x; rough = s.ext.y; ior = s.ext.z;
-    }
-    if (emis > 0.0) { col += thr * alb * emis; break; }
-    let inside = dot(rd, nrm) > 0.0;
-    let nn = select(nrm, -nrm, inside);
-    if (mat == 0) {
-      rd = cosineHemi(nn, rng); thr *= alb; ro = p + nn * 1e-3;
-    } else if (mat == 1) {
-      rd = normalize(reflect(rd, nn) + rough * randSphere(rng));
-      if (dot(rd, nn) <= 0.0) { break; }
-      thr *= alb; ro = p + nn * 1e-3;
-    } else {
-      let eta = select(1.0 / ior, ior, inside);
-      let cosi = clamp(-dot(rd, nn), 0.0, 1.0);
-      let r0 = pow((1.0 - ior) / (1.0 + ior), 2.0);
-      let fr = r0 + (1.0 - r0) * pow(1.0 - cosi, 5.0);
-      let refr = refract(rd, nn, eta);
-      if (all(refr == vec3f(0.0)) || rnd(rng) < fr) { rd = reflect(rd, nn); ro = p + nn * 1e-3; }
-      else { rd = normalize(refr); ro = p - nn * 1e-3; }
-      thr *= alb;
-    }
-    if (b > 2u) {
-      let q = max(thr.x, max(thr.y, thr.z));
-      if (rnd(rng) > q) { break; }
-      thr /= max(q, 1e-3);
-    }
-  }
-  return min(col, vec3f(8.0));
-}
-
-@compute @workgroup_size(8, 8, 1)
-fn cs(@builtin(global_invocation_id) gid: vec3u) {
-  if (gid.x >= P.tile.x || gid.y >= P.tile.y) { return; }
-  let px = P.size.z + gid.x; let py = P.size.w + gid.y;
-  if (px >= P.size.x || py >= P.size.y) { return; }
-  var rng = hashu(px * 1973u + py * 9277u + P.round.x * 26699u + P.tile.w * 7919u) | 1u;
-  var sum = vec3f(0.0);
-  for (var s = 0u; s < P.tile.z; s++) { sum += trace(px, py, &rng); }
-  accum[py * P.size.x + px] += vec4f(sum, f32(P.tile.z));
-}
-
-// ---- tela ----
-struct Screen { size: vec4u, expo: vec4f };
-@group(0) @binding(0) var<uniform> S: Screen;
-@group(0) @binding(1) var<storage, read> acc: array<vec4f>;
-@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-  var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
-  return vec4f(p[i], 0.0, 1.0);
-}
-fn aces(x: vec3f) -> vec3f {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), vec3f(0.0), vec3f(1.0));
-}
-@fragment fn fs(@builtin(position) fc: vec4f) -> @location(0) vec4f {
-  let x = min(u32(fc.x), S.size.x - 1u); let y = min(u32(fc.y), S.size.y - 1u);
-  let a = acc[y * S.size.x + x];
-  var c = select(vec3f(0.0), a.xyz / max(a.w, 1.0), a.w > 0.0);
-  c = aces(c * S.expo.x);
-  return vec4f(pow(c, vec3f(1.0 / 2.2)), 1.0);
-}
-`;
-
-// Cena de teste: chão xadrez + esferas. Material: 0 difuso, 1 metal, 2 vidro. Emissão > 0 = luz.
-const SCENE = [
-  // centro.xyz, raio | cor.rgb, material | emissão, rugosidade, ior, 0
-  [0.0, 1.0, 0.0, 1.0,   0.98, 0.98, 0.98, 2,   0, 0, 1.5, 0],      // vidro
-  [-2.4, 1.0, -0.6, 1.0,  0.90, 0.75, 0.45, 1,   0, 0.08, 0, 0],    // metal dourado
-  [2.4, 1.0, -0.6, 1.0,   0.75, 0.20, 0.18, 0,   0, 0, 0, 0],       // difuso vermelho
-  [0.6, 0.35, 1.8, 0.35,  0.25, 0.55, 0.85, 0,   0, 0, 0, 0],       // difuso azul pequeno
-  [-0.9, 0.3, 1.5, 0.3,   0.92, 0.92, 0.92, 1,   0, 0.35, 0, 0],    // metal fosco
-  [0.0, 9.0, -3.0, 2.5,   1.0, 0.96, 0.9, 0,     14, 0, 0, 0],      // luz principal
-  [-6.0, 3.5, 3.0, 0.8,   1.0, 0.55, 0.25, 0,    18, 0, 0, 0],      // luz quente lateral
-];
-
-let device, queue, computePipe, renderPipe, accumBuf, uniBuf, screenBuf, sphereBuf, bgCompute, bgRender, ctx;
-
-async function init() {
-  if (!navigator.gpu) { $('gpu').textContent = 'no WebGPU'; $('st').textContent = 'view only (WebGPU not available)'; $('go').disabled = true; return; }
-  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-  if (!adapter) { $('gpu').textContent = 'no adapter'; $('st').textContent = 'view only (no GPU adapter)'; $('go').disabled = true; return; }
-  const info = adapter.info || (adapter.requestAdapterInfo ? await adapter.requestAdapterInfo() : {});
-  state.gpu = [info.vendor, info.architecture, info.device, info.description].filter(Boolean).join(' · ') || 'unknown GPU';
-  $('gpu').textContent = state.gpu;
-  device = await adapter.requestDevice();
-  device.addEventListener('uncapturederror', e => { state.error = String(e.error && e.error.message || e.error); showErr('GPU error: ' + state.error); });
-  device.lost.then(i => { state.error = 'device lost: ' + i.message; showErr(state.error); });
-  queue = device.queue;
-  state.supported = true;
-
-  const mod = device.createShaderModule({ code: SHADER });
-  const ci = await mod.getCompilationInfo();
-  for (const m of ci.messages) if (m.type === 'error') showErr(`WGSL ${m.lineNum}:${m.linePos} ${m.message}`);
-
-  accumBuf = device.createBuffer({ size: W * H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-  uniBuf = device.createBuffer({ size: SLOT * NT * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  screenBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  sphereBuf = device.createBuffer({ size: SCENE.length * 48, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
-  queue.writeBuffer(sphereBuf, 0, new Float32Array(SCENE.flat()));
-  queue.writeBuffer(screenBuf, 0, new Uint32Array([W, H, 0, 0]));
-  queue.writeBuffer(screenBuf, 16, new Float32Array([1.0, 0, 0, 0]));
-
-  const bglC = device.createBindGroupLayout({ entries: [
-    { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform', hasDynamicOffset: true } },
-    { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-    { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
-  ]});
-  computePipe = device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [bglC] }), compute: { module: mod, entryPoint: 'cs' } });
-  bgCompute = device.createBindGroup({ layout: bglC, entries: [
-    { binding: 0, resource: { buffer: uniBuf, size: SLOT } },
-    { binding: 1, resource: { buffer: accumBuf } },
-    { binding: 2, resource: { buffer: sphereBuf } },
-  ]});
-
-  const canvas = $('cv');
-  ctx = canvas.getContext('webgpu');
-  const fmt = navigator.gpu.getPreferredCanvasFormat();
-  ctx.configure({ device, format: fmt, alphaMode: 'opaque' });
-  const bglR = device.createBindGroupLayout({ entries: [
-    { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
-    { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
-  ]});
-  renderPipe = device.createRenderPipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [bglR] }),
-    vertex: { module: mod, entryPoint: 'vs' }, fragment: { module: mod, entryPoint: 'fs', targets: [{ format: fmt }] }, primitive: { topology: 'triangle-list' } });
-  bgRender = device.createBindGroup({ layout: bglR, entries: [ { binding: 0, resource: { buffer: screenBuf } }, { binding: 1, resource: { buffer: accumBuf } } ] });
-
-  draw();
-  $('st').textContent = 'ready';
-  const q = new URLSearchParams(location.search);
-  if (q.get('auto') === '1') start();
-}
-
-// Câmera fixa da cena de teste
-const cam = (() => {
-  const pos = [0, 1.6, 6.5], look = [0, 0.9, 0];
-  const f = norm(sub(look, pos)); const r = norm(cross(f, [0, 1, 0])); const u = cross(r, f);
-  const fovY = 38 * Math.PI / 180; const ty = Math.tan(fovY / 2); const tx = ty * W / H;
-  return { pos, f, r, u, tx, ty };
-  function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
-  function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
-  function norm(a) { const l = Math.hypot(...a); return [a[0] / l, a[1] / l, a[2] / l]; }
-})();
-
-function draw() {
-  const enc = device.createCommandEncoder();
-  const rp = enc.beginRenderPass({ colorAttachments: [{ view: ctx.getCurrentTexture().createView(), loadOp: 'clear', clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: 'store' }] });
-  rp.setPipeline(renderPipe); rp.setBindGroup(0, bgRender); rp.draw(3); rp.end();
-  queue.submit([enc.finish()]);
-}
-
-// Preenche um slot de uniform (256 B) com os parâmetros de um ladrilho
-const slotBytes = new ArrayBuffer(SLOT * NT * 4);
-function fillSlot(slot, tx, ty, pass) {
-  const u = new Uint32Array(slotBytes, slot * SLOT, 12);
-  const f = new Float32Array(slotBytes, slot * SLOT + 48, 20);
-  u.set([W, H, tx * TILE, ty * TILE,  TILE, TILE, SPP_PER_DISPATCH, 1234567,  pass, 0, 0, 0]);
-  f.set([...cam.pos, 0, ...cam.f, 0, ...cam.r, 0, ...cam.u, 0, cam.tx, cam.ty, 0, 0]);
-}
-
-let unit = 0;          // próximo ladrilho na ordem: rodada por rodada, todos os ladrilhos
-const tctx = $('tiles').getContext('2d');
-function markTiles(from, count) {
-  tctx.clearRect(0, 0, W, H);
-  tctx.strokeStyle = 'rgba(232,230,225,0.55)'; tctx.lineWidth = 2;
-  for (let k = 0; k < count; k++) { const t = (from + k) % NT; tctx.strokeRect((t % TX) * TILE + 1, Math.floor(t / TX) * TILE + 1, TILE - 2, TILE - 2); }
-}
-
-let t0 = 0, lastUi = 0, hist = [];
-async function loop() {
-  while (state.running) {
-    const n = Math.min(state.batch, NT * 4);
-    for (let k = 0; k < n; k++) { const u = unit + k; fillSlot(k, u % NT % TX, Math.floor(u % NT / TX), Math.floor(u / NT)); }
-    queue.writeBuffer(uniBuf, 0, slotBytes, 0, n * SLOT);
-    const enc = device.createCommandEncoder();
-    const cp = enc.beginComputePass();
-    cp.setPipeline(computePipe);
-    for (let k = 0; k < n; k++) { cp.setBindGroup(0, bgCompute, [k * SLOT]); cp.dispatchWorkgroups(TILE / 8, TILE / 8); }
-    cp.end();
-    const tb = performance.now();
-    queue.submit([enc.finish()]);
-    await queue.onSubmittedWorkDone();
-    const ms = performance.now() - tb;
-    markTiles(unit, n);
-    unit += n;
-    state.tiles += n;
-    state.samples += n * TILE * TILE * SPP_PER_DISPATCH;
-    // adapta o tamanho do lote para ~40 ms de GPU por rodada
-    if (ms < 20 && state.batch < NT * 4) state.batch = Math.min(state.batch * 2, NT * 4);
-    else if (ms > 90 && state.batch > 1) state.batch = Math.max(1, Math.floor(state.batch / 2));
-    draw();
-    const now = performance.now();
-    hist.push([now, state.samples, state.tiles]);
-    while (hist.length > 2 && now - hist[0][0] > 5000) hist.shift();
-    if (now - lastUi > 250) { lastUi = now; ui(now); }
-    if (!state.reported && now - t0 > benchSeconds * 1000) report();
-    await new Promise(requestAnimationFrame);
-  }
-}
-
-function ui(now) {
-  state.elapsed = (now - t0) / 1000;
-  const h0 = hist[0];
-  const dt = (now - h0[0]) / 1000;
-  state.rate = dt > 0.5 ? (state.samples - h0[1]) / dt : 0;
-  state.tileRate = dt > 0.5 ? (state.tiles - h0[2]) / dt : 0;
-  state.spp = state.samples / (W * H);
-  $('rate').textContent = state.rate ? (state.rate / 1e6).toFixed(1) + ' M' : '—';
-  $('trate').textContent = state.tileRate ? state.tileRate.toFixed(0) : '—';
-  $('spp').textContent = state.spp.toFixed(1);
-  $('el').textContent = state.elapsed.toFixed(0) + ' s';
-  if (state.rate) {
-    const hours = FILM_SAMPLES / state.rate / 3600;
-    $('film').textContent = fmtHours(hours);
-    $('film100').textContent = fmtHours(hours / 100);
-  }
-}
-function fmtHours(h) { return h > 48 ? (h / 24).toFixed(1) + ' days' : h.toFixed(1) + ' hours'; }
-
-const benchSeconds = Number(new URLSearchParams(location.search).get('seconds') || 20);
-async function report() {
-  state.reported = true;
-  $('st').textContent = 'computing · measurement sent';
-  const body = { gpu: state.gpu, samplesPerSec: Math.round(state.rate), tilesPerSec: +state.tileRate.toFixed(1), width: W, height: H,
-    tile: TILE, sppPerDispatch: SPP_PER_DISPATCH, seconds: +state.elapsed.toFixed(1), ua: navigator.userAgent, at: new Date().toISOString() };
-  try { await fetch('/api/bench', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); }
-  catch (e) { showErr('could not send measurement: ' + e.message); }
-}
-
-function start() {
-  if (state.running) { state.running = false; $('go').textContent = 'Start computing'; $('st').textContent = 'stopped'; return; }
-  state.running = true; t0 = performance.now(); lastUi = 0; hist = [[t0, state.samples, state.tiles]];
-  $('go').textContent = 'Stop'; $('st').textContent = 'computing';
-  loop().catch(e => { state.error = e.message; showErr('loop: ' + e.message); state.running = false; });
-}
-$('go').addEventListener('click', start);
-
-const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-if (mobile) { $('go').disabled = true; $('st').textContent = 'view only on phones'; $('note').textContent = 'Phones only watch. Computing runs on desktops and laptops.'; }
-else init().catch(e => { state.error = e.message; showErr('init: ' + e.message); $('st').textContent = 'failed'; });
-</script>
+<script type="module" src="client.js"></script>
 </body>
 </html>

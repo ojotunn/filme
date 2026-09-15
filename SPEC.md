@@ -41,23 +41,39 @@ Uma unidade = (quadro, ladrilho, lote de passadas, semente).
 
 - O servidor mantém a fila de unidades e o acumulador de cada quadro (RGB em
   float16 + contagem de passadas por pixel) no disco do volume.
-- A máquina do visitante recebe a unidade, renderiza e devolve o bloco RGB float
+- A máquina do visitante recebe a unidade, renderiza e devolve a SOMA RGB float
   do ladrilho (64 × 64 × 3 floats = 48 KB) mais o número de passadas.
 - O servidor soma no acumulador e regera o PNG visível do quadro.
-- Ordem da fila: quadro por quadro, do 0 ao 1.439, com passadas em rodadas
-  (todos os ladrilhos do quadro recebem a rodada N antes da rodada N+1), para
-  que cada quadro fique visível cedo e vá limpando por igual.
+- Ordem da fila: janela de `WINDOW` quadros (padrão 2) a partir do primeiro
+  não terminado; dentro dela, primeiro unidades que esperam verificação, depois
+  o ladrilho com maior déficit de passadas, para que o quadro limpe por igual.
+- Quadro termina quando todos os ladrilhos atingem o alvo e nenhuma unidade dele
+  está aberta; aí vira PNG final e o acumulador sai da memória.
 
 ## Verificação (contra lixo e trapaça)
 
-- Cada unidade vai para DUAS máquinas diferentes, escolhidas ao acaso.
-- Placas diferentes produzem diferenças pequenas em ponto flutuante, então os
-  dois resultados são comparados por erro médio relativo com tolerância; a
-  tolerância exata sai da fase 3 (medida entre placas reais).
-- Se não batem, uma terceira máquina desempata; quem destoou perde reputação.
-- Máquina com reputação abaixo do piso recebe unidades, mas o resultado só entra
-  quando confirmado por outra máquina de reputação boa.
-- Anônimo calcula igual; só a reputação da sessão manda.
+Decisão de 15/09 (fase 3): redundância que não desperdiça nada.
+
+- Cada unidade (quadro, ladrilho) é entregue a DUAS máquinas diferentes, cada uma
+  com a própria semente. Os dois resultados são amostras independentes da mesma
+  imagem, então OS DOIS entram no acumulador. Verificar custa zero.
+- A comparação é estatística: a média de cada bloco de 8 × 8 px de um resultado
+  contra a do outro, erro relativo médio por bloco. Placas diferentes e sementes
+  diferentes dão erro pequeno; lixo dá erro perto de 1. Tolerância `TOL`
+  (padrão 0,35), recalibrada com a distribuição medida entre placas reais.
+- Se os dois não batem, uma terceira máquina desempata: o resultado que destoa é
+  SUBTRAÍDO do acumulador e a máquina perde reputação (-2). Acordo dá +1.
+- Máquina com reputação abaixo de -3 não recebe mais unidades.
+- Resultado entra no acumulador na hora (provisório) e o quadro já melhora na
+  tela; a verificação vem atrás. Unidade com um resultado só e ninguém para
+  verificar expira depois de `EXPIRE_S` (padrão 60 s) e fecha sem verificação,
+  para que uma máquina sozinha nunca trave o filme.
+- Limite conhecido: quem manda uma versão borrada/pobre do ladrilho certo passa
+  na comparação por blocos. Aceito na fase 3; o multiplicador de créditos por
+  reputação (fase 5) reduz o incentivo.
+- A quantidade de passadas por unidade é escolhida por máquina (mais rápida,
+  unidade maior), múltiplo de 16 entre 32 e 1.024, limitada ao que falta ao
+  ladrilho.
 
 ## Token, prioridade e créditos
 
