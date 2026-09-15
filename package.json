@@ -1,0 +1,15 @@
+{
+  "name": "filme",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The holders' supercomputer: a short film rendered by the visitors' GPUs.",
+  "scripts": {
+    "start": "node src/server.js",
+    "prova": "node prova/prova_navegador.js"
+  },
+  "engines": { "node": ">=22" },
+  "devDependencies": {
+    "puppeteer-core": "^25.10.0"
+  }
+}
