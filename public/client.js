@@ -113,7 +113,8 @@ let shownFrame = -1, lastImg = 0, viewFrame = null;
 const img = new Image();
 img.onload = () => { cv.width = img.width; cv.height = img.height; cx.drawImage(img, 0, 0); };
 function showFrame(frame, tiles, f) {
-  const target = viewFrame ?? frame;
+  // filme terminado (frame = -1): mostra o último quadro pronto, sem mapa de ladrilhos
+  const target = viewFrame ?? (frame >= 0 ? frame : f.frames - 1);
   if (target < 0) return;
   const now = Date.now();
   if (target !== shownFrame || now - lastImg > 2000) { shownFrame = target; lastImg = now; img.src = `/frames/${target}.png?v=${now}`; }
@@ -165,7 +166,7 @@ function ui(now) {
   if (r) { const hours = FILM_SAMPLES / r / 3600; $('film').textContent = fmtHours(hours); $('film100').textContent = fmtHours(hours / 100); }
   if (ws && ws.readyState === 1 && state.rate) ws.send(JSON.stringify({ t: 'rate', rate: Math.round(gpuRate || state.rate) }));
 }
-function fmtHours(h) { return h > 48 ? (h / 24).toFixed(1) + ' days' : h.toFixed(1) + ' hours'; }
+function fmtHours(h) { return h > 48 ? (h / 24).toFixed(1) + ' days' : h >= 1 ? h.toFixed(1) + ' hours' : (h * 60).toFixed(0) + ' min'; }
 
 const benchSeconds = Number(q.get('seconds') || 20);
 async function report() {
